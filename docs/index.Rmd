@@ -1,19 +1,57 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Pokemon Stats Project"
+author: "Cole Dwiggins"
+Date: "2024-09-24"
+output:
+  html_document:
+    toc: true
+    toc_depth: '3'
+    df_print: paged
+  html_notebook:
+    fig_caption: true
+    theme: cerulean
+    toc: true
+    toc_depth: 3
+    toc_float: true
 ---
 
+<img src="Ash_Ketchum.png" style="display: block; margin-left: auto; margin-right: auto;"/>
+
+# Introduction
+
+The goal of this project is to determine which two stats, if any, can predict the type of a Pokemon. In the Pokemon franchise, each species of Pokemon can have 1-2 types, a primary type and a secondary type. These types determine the Pokemon's strengths and weaknesses, what moves it can learn, and to some extent its stats. An individual Pokemon has six stats that determine its characteristics: HP (Hit Points), Attack, Defense, Special Attack, Special Defense, and Speed. The higher each stat is, the stronger that Pokemon is in that certain area. Adding up all the stats of a Pokemon will give you a general sense of how strong the Pokemon is. Being able to classify different species of Pokemon can be helpful to researchers who discover new species with unknown types, if their stats are measured.
+
+This dataset was obtained from Kaggle.com (<https://www.kaggle.com/datasets/abcsds/pokemon>). In the following project code, the data was imported and cleaned for processing, the effect of each Pokemon stat on type was explored, and several classification models were compared to see which two stats, if any, predict the Pokemon type.
+
+# Project Code
+
+## Required Libraries and Data
+
 ```{r}
+library <- function (...) {
+   packages <- as.character(match.call(expand.dots = FALSE)[[2]])
+   suppressWarnings(suppressMessages(lapply(packages, base::library, character.only = TRUE)))
+   return(invisible())
+}
+
 library(dplyr)
 library(readr)
 library(magrittr)
+library(ggplot2)
+library(rstatix)
+library(tidyr)
+library(tidymodels)
+library(rpart)
+library(rpart.plot)
+library(class)
+library(randomForest)
 ```
 
 ```{r}
 pokemon <- read_csv("Pokemon.csv", show_col_types = FALSE)
 ```
 
-### The first task will be do to some data cleaning
+## Data Cleaning and Inspection
 
 Lets first check the data types and then go from there.
 
@@ -79,8 +117,7 @@ Nothing here seems out of the ordinary. The only next step would be to convert t
 ```{r}
 pokemon <- pokemon %>%
   mutate(`Type 1` = as.factor(`Type 1`),
-         `Type 2` = as.factor(`Type 2`),
-        # `Legendary` = as.factor(ifelse(`Legendary`, "Yes", "No"))
+         `Type 2` = as.factor(`Type 2`)
          )
 
 head(pokemon)
@@ -88,17 +125,9 @@ head(pokemon)
 
 Now all the data types are converted correctly, and the data is ready for analysis.
 
-### Exploratory Data Analysis
+## Exploratory Data Analysis
 
 **Main question: What two stats, if any, can predict the type of Pokemon?**
-
-```{r}
-library(ggplot2)
-```
-
-```{r}
-head(pokemon)
-```
 
 Is there a certain type of Pokemon with noticeably different total stats than the others?
 
@@ -326,10 +355,6 @@ kruskal.test(
 
 The p-values indicate statistical significance, but post-hoc testing will need to be performed to see which groups are different from each other.
 
-```{r}
-library(rstatix)
-```
-
 Post hoc testing
 
 ```{r}
@@ -379,7 +404,7 @@ dunn_test(
 
 Based on these tests, it looks like Speed is out of the running. Thus, the top 3 stats to test for in predictive modeling would be Attack, Sp. Atk, and Defense.
 
-### Modeling
+## Classification Modeling
 
 Before any modeling is done the data should be standardized for good measure.
 
@@ -388,11 +413,6 @@ The standard = (xi - xbar)/st_dev
 The data should also be split into train and test datasets (an 80/20 split will be used).
 
 Separate datasets will be created that use Attack and Sp. Atk, Attack and Defense, and Defense and Sp. Atk. The label will be included in the dataset.
-
-```{r}
-library(tidyr)
-library(tidymodels)
-```
 
 ```{r}
 #scale the data
@@ -429,11 +449,6 @@ Def_SpAtk_Test <- testing(Def_SpAtk_Split)
 Now create the decision tree models
 
 ```{r}
-library(rpart)
-library(rpart.plot)
-```
-
-```{r}
 Attack_SpAtk_mdl <- rpart(`Type1` ~ `Attack` + `Sp. Atk`, data = Attack_SpAtk_Train, method = "class")
 Attack_Def_mdl <- rpart(`Type1` ~ `Attack` + `Defense`, data = Attack_Def_Train, method = "class")
 Def_SpAtk_mdl <- rpart(`Type1` ~ `Defense` + `Sp. Atk`, data = Def_SpAtk_Train, method = "class")
@@ -445,18 +460,6 @@ Visualize the decision trees
 rpart.plot(Attack_SpAtk_mdl, fallen.leaves = TRUE)
 rpart.plot(Attack_Def_mdl, fallen.leaves = TRUE)
 rpart.plot(Def_SpAtk_mdl, fallen.leaves = TRUE)
-
-# par(xpd = TRUE)
-# plot(Attack_SpAtk_mdl, compress = TRUE)
-# text(Attack_SpAtk_mdl, use.n = FALSE)
-# 
-# par(xpd = TRUE)
-# plot(Attack_Def_mdl, compress = TRUE)
-# text(Attack_Def_mdl, use.n = FALSE)
-# 
-# par(xpd = TRUE)
-# plot(Def_SpAtk_mdl, compress = TRUE)
-# text(Def_SpAtk_mdl, use.n = FALSE)
 ```
 
 These plots suggest that the decision tree model is not very robust. However, lets evaluate them before giving a clear answer.
@@ -489,10 +492,6 @@ mean(Def_SpAtk_Test$pred == Def_SpAtk_Test$Type1)
 This model had an accuracy of 23.1% which is higher than the other models, but still very low overall.
 
 **Next a k-NN model will be tried**
-
-```{r}
-library(class)
-```
 
 ```{r}
 pokemon_types <- Attack_SpAtk_Train$Type1
@@ -532,10 +531,6 @@ mean(Def_SpAtk_Pred == Def_SpAtk_Actual)
 Overall, kNN appears to have worse performance than the decision tree.
 
 **Next, a random forest will be tried**
-
-```{r}
-library(randomForest)
-```
 
 ```{r}
 names(Attack_SpAtk_Train)[names(Attack_SpAtk_Train) == "Sp. Atk"] <- "SpAtk"
@@ -586,11 +581,11 @@ print("Accuracy: ")
 mean(Def_SpAtk_Test$pred_rf == Def_SpAtk_Actual)
 ```
 
-**After examining the model plots and the model scores, its apparent that the models struggle to delineate between Pokemon types off just two stats alone. According to the model plots, the model could delineate between Water, Bug, Normal, and Psychic for Attack and Sp. Atk, Water, Normal, and Psychic for Attack and Defense, and Water, Normal, Bug, and Rock for Defense and Sp. Atk. All three models could not determine any other types, leaving out 14-15 types of Pokemon each time from its predictions. It is no surprise then, that the accuracy for all corresponding models are so low.**
+After examining the model plots and the model scores, its apparent that the models struggle to delineate between Pokemon types off just two stats alone. According to the model plots, the model could delineate between Water, Bug, Normal, and Psychic for Attack and Sp. Atk, Water, Normal, and Psychic for Attack and Defense, and Water, Normal, Bug, and Rock for Defense and Sp. Atk. All three models could not determine any other types, leaving out 14-15 types of Pokemon each time from its predictions. It is no surprise then, that the accuracy for all corresponding models are low.
 
 **Therefore, this is evidence that no two stats alone can predict the type of Pokemon. However, to know for certain, a decision tree model with all the features should be built, and the corresponding feature importance should be calculated.**
 
-### Decision Tree Model With All Pokemon Stats Included
+Decision Tree Model With All Pokemon Stats Included
 
 ```{r}
 #Create a new train test split for Pokemon with all features except legendary status
@@ -761,7 +756,7 @@ dunn_test(
 
 While Defense did not show any significance between types, Sp. Def and Speed did show significance between types. Since Sp. Def showed slightly higher statistical significance between the groups, if any two stats are going to predict the type of Pokemon, it will be Sp. Atk and Sp. Def
 
-**Now the decision tree model will be built with just Sp. Atk and Sp. Def as features**
+**Now the decision tree model will be built with just Sp. Atk and Sp. Def as features. The confusion matrices will not be displayed as they will be quite large.**
 
 ```{r}
 pokemon_alltypes_combined_SpAtk_SpDef <- pokemon_alltypes_combined %>%
@@ -779,8 +774,6 @@ pokemon_alltypes_combined_SpAtk_SpDef_test <- testing(train_test_split)
 alltypes_SpAtk_SpDef_mdl <- rpart(Type ~ `Sp. Atk` + `Sp. Def`, data = pokemon_alltypes_combined_SpAtk_SpDef_train, method = 'class')
 
 pokemon_alltypes_combined_SpAtk_SpDef_test$pred <- predict(alltypes_SpAtk_SpDef_mdl, newdata = pokemon_alltypes_combined_SpAtk_SpDef_test, type = 'class')
-
-table(pokemon_alltypes_combined_SpAtk_SpDef_test$pred, pokemon_alltypes_combined_SpAtk_SpDef_test$Type)
 
 print("Accuracy: ")
 mean(pokemon_alltypes_combined_SpAtk_SpDef_test$pred == pokemon_alltypes_combined_SpAtk_SpDef_test$Type)
@@ -802,7 +795,6 @@ pokemon_alltypes_allstats_mdl <- rpart(Type ~ ., data = pokemon_alltypes_allstat
 
 pokemon_alltypes_allstats_test$pred = predict(pokemon_alltypes_allstats_mdl, newdata = pokemon_alltypes_allstats_test, type = 'class')
 
-table(pokemon_alltypes_allstats_test$pred, pokemon_alltypes_allstats_test$Type)
 print("Accuracy: ")
 mean(pokemon_alltypes_allstats_test$pred == pokemon_alltypes_allstats_test$Type)
 ```
@@ -811,10 +803,18 @@ Even with all stats combined, the model only reached an accuracy of 15%.
 
 **Thus, there does not seem to be any one set of two Pokemon stats that is able to predict the type of Pokemon.**
 
-### Conclusion
+# Results
 
-The aim of this project was to analyze a Pokemon stats dataset and to determine which two stats, if any, could predict the type of Pokemon. The project proceeded by analyzing ways to create less skewing in the dataset and found that removing legendary Pokemon would reduce bias towards a type. The project then analyzed the various stats for separation and grouping, finding that Defense and Sp. Atk could potentially predict the Type of Pokemon. After building decision tree, kNN, and random forest models and finding that the maximum arrucary was only around 23%, the project then pivoted to analyze the stats while taking the Pokemon's primary and secondary types into account, in an attempt to build a better model. Re-analyzing the Pokemon stats across primary and secondary types revealed potential separation between the Sp. Atk and Sp. Def stats, and a decision tree model was built. Evaluating this model revealed an 8% accuracy, so all of the Pokemon stats were used in a new decision tree model for comparison. This final decision tree model produced an accuracy of \~16%. With all the data gathered, it is evident that there are no single two statistics that can predict the type of Pokemon.
+## Discussion
+
+The aim of this project was to analyze a Pokemon stats dataset and to determine which two stats, if any, could predict the type of Pokemon. The project proceeded by analyzing ways to create less skewing in the dataset and found that removing legendary Pokemon would reduce bias towards a type. The project then analyzed the various stats for separation and grouping, finding that Defense and Sp. Atk could potentially predict the Type of Pokemon. After building decision tree, kNN, and random forest models and finding that the maximum accuracy was only around 23%, the project then pivoted to analyze the stats while taking the Pokemon's primary and secondary types into account, in an attempt to build a better model. Re-analyzing the Pokemon stats across primary and secondary types revealed potential separation between the Sp. Atk and Sp. Def stats, and a decision tree model was built. Evaluating this model revealed an 8% accuracy, so all of the Pokemon stats were used in a new decision tree model for comparison. This final decision tree model produced an accuracy of \~16%. With all the data gathered, it is evident that there are no single two statistics that can predict the type of Pokemon.
 
 ## Next steps
 
-Throughout the project, data imbalances appeared to be quite present, with some Pokemon types such as Water and Normal often being over triple in size of other Pokemon types. It would be interesting to see how the accuracy of the models changed if each type was represented equally in the training data, and how that would affect the model's performance.
+Throughout the project, data imbalances appeared to be quite present, with some Pokemon types such as Water and Normal often being over triple in size of other Pokemon types. It would be interesting to see how the accuracy of the models changed if each type was represented equally in the training data, and how that would affect the model's performance. This would be the clear next step to take with these classification models.
+
+# Conclusion
+
+To conclude, after thorough analysis, this project was unable to find two stats that could predict the type of Pokemon, with the interpretation of results and next steps outlined above. Ultimately, if new species of Pokemon are discovered, researchers will have to rely on other methods aside from stat measurement to determine the Pokemon's type.
+
+<img src="Pokemon.webp" style="display: block; margin-left: auto; margin-right: auto;"/>
